@@ -1,25 +1,169 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+output: html_document
 ---
 
+Reproducible Research Assignment 1
 
-## Loading and preprocessing the data
+=========================
+
+I have forked the repo for this assignment into my own GitHub repo: [https://github.com/njohsn/RepData_PeerAssessment1](https://github.com/njohsn/RepData_PeerAssessment1).  
+Descriptions of each step are contained in this file, but the full assignment instructions can be found at that link. 
+
+Code for reading in the dataset and/or processing the data
+Read the dataset into R. This assumes that the data has already been downloaded from GitHub or the course website into the working directory. 
+
+```{r}
+library(dplyr)
+data<-read.csv("activity.csv", na.strings="NA", stringsAsFactors=FALSE, header=TRUE)
+head(data)
+```
+
+Histogram of the total number of steps taken each day
+```{r}
+library(ggplot2)
+ds <- select(data, date, steps)
+ds <- na.omit(ds)
+sums <- ds %>% group_by(date) %>% summarise(sum(steps))
+colnames(sums) <- c("date", "totalsteps")
+with(sums, hist(totalsteps, xlab="Total Steps per Day", ylab="Frequency", main="Total Steps per Day"))
+
+```
+
+Mean and median number of steps taken each day
+
+```{r}
+mean(sums$totalsteps)
+median(sums$totalsteps)
+```
+
+
+Time series plot of the average number of steps taken for each 5 minutes interval, averaged across all days
+
+```{r}
+ints <- select(data, interval, steps)
+ints <- na.omit(ints)
+avgs <- ints %>% group_by(interval) %>% summarize(mean(steps))
+colnames(avgs) <- c("interval", "avgsteps")
+with(avgs, plot(x=interval, y=avgsteps, type="l", main = "Average Steps per Coded Interval", xlab="Interval", ylab="Average steps"))
+
+```
+
+The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r}
+maxint <- arrange(avgs, desc(avgsteps))
+maxint[1,1]
+```
+
+
+There is a considerable amount of missing ("NA") data in this data set. 
+
+Number of NA observations:
+
+```{r}
+sum(is.na(data))
+```
+
+
+Instead of excluding these results, as has been done to this point, we can instead impute a reasonable value to replace those that are missing. I have chosen to use the mean of the valid measurements for each interval that has an "NA" value. This new dataset is named "impdata".
+
+```{r}
+impdata <- data
+impdataavgs<-left_join(impdata,avgs,by="interval")
+impdataavgs$steps[which(is.na(impdataavgs$steps))] <- impdataavgs[which(is.na(impdataavgs$steps)),4]
+impdata<-impdataavgs[,1:3]
+
+```
+
+Histogram of the total number of steps taken each day after missing values are imputed.
+
+```{r}
+dsimp <- select(impdata, date, steps)
+sumsimp <- dsimp %>% group_by(date) %>% summarise(sum(steps))
+colnames(sumsimp) <- c("date", "totalsteps")
+with(sumsimp, hist(totalsteps, xlab="Total Steps per Day", ylab="Frequency", main="Total Steps per Day"))
+```
+
+Mean and median of total steps per day after NA values are imputed. 
+
+```{r}
+mean(sumsimp$totalsteps)
+median(sumsimp$totalsteps)
+```
+
+Difference between means with NAs omitted vs. NAs imputed:
+
+```{r}
+mean(sumsimp$totalsteps) - mean(sums$totalsteps)
+```
+
+Difference between medians with NAs omitted vs. NAs imputed:
+
+```{r}
+median(sumsimp$totalsteps) - median(sums$totalsteps)
+```
+
+There appears to be minimal difference between the mean and medians of total steps taken per day when NAs are omitted vs. when NAs are imputed using the mean of the corresponding coded interval, and the shape of the histogram did not change significantly. However, there are more occurrences of the total steps being between 10,000 and 15,000 steps per day with the imputed data set.
 
 
 
-## What is mean total number of steps taken per day?
+
+
+Are there differences in activity patterns between weekdays and weekends?
+
+
+FIrst, I created a new factor variable in the dataset with two levels (weekday and weekend) to indicate whether a given date is a weekday or weekend day.
+
+```{r}
+impdataw <- impdata
+impdataw$date <- as.Date(impdataw$date)
+wkd <- weekdays(impdataw$date, abbreviate=TRUE)
+wkd <- as.data.frame(wkd)
+impdataw <-bind_cols(impdataw, wkd)
+
+daylist <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+daylist<- as.data.frame(daylist)
+colnames(daylist) <- c("wkd")
+
+status <- c("weekday", "weekday", "weekday", "weekday", "weekday", "weekend", "weekend")
+status <- as.data.frame(status)
+colnames(status) <- c("weekpart")
+
+lookup <- bind_cols(daylist,status)
+
+impdataw<-left_join(impdataw,lookup,by="wkd")
+```
+
+
+Panel plot of the 5-minute interval and the average number of steps taken, averaged across all weekday days or weekend days.
 
 
 
-## What is the average daily activity pattern?
+```{r}
+
+impdatawd <- subset(impdataw, weekpart=="weekday")
+wdavgs <- impdatawd %>% group_by(interval) %>% summarize(mean(steps))
+wdavgs$weekpart <- "weekday"
+colnames(wdavgs) <- c("interval", "avgsteps", "weekpart")
+
+impdatawe <- subset(impdataw, weekpart=="weekend")
+weavgs <- impdatawe %>% group_by(interval) %>% summarize(mean(steps))
+weavgs$weekpart <- "weekend"
+colnames(weavgs) <- c("interval", "avgsteps", "weekpart")
+
+impavgs <- bind_rows(wdavgs, weavgs)
+
+library(lattice)
+xyplot(avgsteps ~ interval | weekpart,
+        layout = c(1,2),
+        data = impavgs,
+        type = "l",
+        lty = c(1, 2, 2, 1),
+        lwd = c(1, 1, 1, 3), 
+        main = "Average Steps Taken by Coded Interval (imputed data)", 
+        xlab="Interval",
+        ylab="Steps")
+ 
+```
 
 
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
